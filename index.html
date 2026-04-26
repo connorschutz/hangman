@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hangman</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f9ff;
+      color: #0f172a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .game-container {
+      background: #ffffff;
+      padding: 28px 36px;
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      border: 3px solid #38bdf8;
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 32px;
+      color: #0284c7;
+    }
+
+    #word div {
+      font-size: 34px;
+      letter-spacing: 10px;
+      margin: 10px 0;
+      color: #0f172a;
+    }
+
+    #message {
+      min-height: 24px;
+      margin-bottom: 12px;
+      font-weight: bold;
+      color: #dc2626;
+    }
+
+    #wrong-letters {
+      margin: 10px 0;
+      font-size: 16px;
+      color: #ef4444;
+    }
+
+    .input-row {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      font-size: 20px;
+      width: 60px;
+      text-align: center;
+      border-radius: 6px;
+      border: 2px solid #38bdf8;
+      background: #e0f2fe;
+      color: #0f172a;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #0ea5e9;
+      color: white;
+      transition: background 0.15s ease;
+    }
+
+    button:hover {
+      background: #0284c7;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: default;
+    }
+
+    #hangman-state {
+      margin-top: 16px;
+      font-family: monospace;
+      white-space: pre;
+      font-size: 14px;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>Hangman</h1>
+    <div id="word"></div>
+    <div id="message"></div>
+    <div id="wrong-letters">Wrong: </div>
+
+    <div class="input-row">
+      <input id="letter-input" type="text" maxlength="1" autocomplete="off" />
+      <button id="guess-btn">Guess</button>
+      <button id="reset-btn">New Game</button>
+    </div>
+
+    <div id="hangman-state"></div>
+  </div>
+
+  <script>
+    // First phrase is always Cabrillo College
+    let firstRound = true;
+
+    // Random single words for later rounds
+    const words = [
+      "javascript",
+      "browser",
+      "function",
+      "variable",
+      "hangman",
+      "computer",
+      "internet",
+      "keyboard",
+      "monitor",
+      "program"
+    ];
+
+    // Track used words so no repeats
+    let usedWords = [];
+
+    const maxWrong = 6;
+
+    let secretWord = "";
+    let guessedLetters = [];
+    let wrongLetters = [];
+    let gameOver = false;
+
+    const wordEl = document.getElementById("word");
+    const messageEl = document.getElementById("message");
+    const wrongLettersEl = document.getElementById("wrong-letters");
+    const letterInput = document.getElementById("letter-input");
+    const guessBtn = document.getElementById("guess-btn");
+    const resetBtn = document.getElementById("reset-btn");
+    const hangmanStateEl = document.getElementById("hangman-state");
+
+    function pickWord() {
+      if (firstRound) {
+        firstRound = false;
+        usedWords.push("cabrillo college");
+        return "cabrillo college";
+      }
+
+      // Filter out used words
+      let available = words.filter(w => !usedWords.includes(w));
+
+      // Reset if all used
+      if (available.length === 0) {
+        usedWords = [];
+        available = words;
+      }
+
+      const choice = available[Math.floor(Math.random() * available.length)];
+      usedWords.push(choice);
+      return choice;
+    }
+
+    function initGame() {
+      secretWord = pickWord();
+      guessedLetters = [];
+      wrongLetters = [];
+      gameOver = false;
+      messageEl.textContent = "";
+      updateWordDisplay();
+      updateWrongLetters();
+      updateHangmanState();
+      letterInput.value = "";
+      letterInput.focus();
+      guessBtn.disabled = false;
+    }
+
+    // MULTI-WORD PHRASES STACK VERTICALLY
+    function updateWordDisplay() {
+      const wordsInPhrase = secretWord.split(" ");
+      let html = "";
+
+      for (const w of wordsInPhrase) {
+        let row = "";
+        for (const char of w) {
+          if (guessedLetters.includes(char)) {
+            row += char.toUpperCase() + " ";
+          } else {
+            row += "_ ";
+          }
+        }
+        html += `<div>${row.trim()}</div>`;
+      }
+
+      wordEl.innerHTML = html;
+    }
+
+    function updateWrongLetters() {
+      wrongLettersEl.textContent = "Wrong: " + wrongLetters.join(" ").toUpperCase();
+    }
+
+    function updateHangmanState() {
+      const stages = [
+        `
+        
+        
+        
+        
+========`,
+        `
+    |
+    |
+    |
+    |
+    |
+========`,
+        `
+ +--+
+    |
+    |
+    |
+    |
+========`,
+        `
+ +--+
+ |  |
+    |
+    |
+    |
+========`,
+        `
+ +--+
+ |  |
+ O  |
+    |
+    |
+========`,
+        `
+ +--+
+ |  |
+ O  |
+/|\\ |
+    |
+========`,
+        `
+ +--+
+ |  |
+ O  |
+/|\\ |
+/ \\ |
+========`
+      ];
+      hangmanStateEl.textContent = stages[wrongLetters.length];
+    }
+
+    function checkGameStatus() {
+      const allGuessed = secretWord
+        .split("")
+        .every(c => c === " " || guessedLetters.includes(c));
+
+      if (allGuessed) {
+        messageEl.textContent = "You win! 🎉";
+        gameOver = true;
+        guessBtn.disabled = true;
+      } else if (wrongLetters.length >= maxWrong) {
+        messageEl.textContent = `You lost. The phrase was: ${secretWord.toUpperCase()}`;
+        gameOver = true;
+        guessBtn.disabled = true;
+      }
+    }
+
+    function handleGuess() {
+      if (gameOver) return;
+
+      const raw = letterInput.value.toLowerCase();
+      letterInput.value = "";
+      letterInput.focus();
+
+      const letter = raw.match(/[a-z]/) ? raw[0] : null;
+      if (!letter) {
+        messageEl.textContent = "Please enter a letter A–Z.";
+        return;
+      }
+
+      if (guessedLetters.includes(letter) || wrongLetters.includes(letter)) {
+        messageEl.textContent = "You already tried that letter.";
+        return;
+      }
+
+      if (secretWord.includes(letter)) {
+        guessedLetters.push(letter);
+        messageEl.textContent = "Nice!";
+      } else {
+        wrongLetters.push(letter);
+        messageEl.textContent = "Nope.";
+      }
+
+      updateWordDisplay();
+      updateWrongLetters();
+      updateHangmanState();
+      checkGameStatus();
+    }
+
+    guessBtn.addEventListener("click", handleGuess);
+
+    letterInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") {
+        handleGuess();
+      }
+    });
+
+    resetBtn.addEventListener("click", initGame);
+
+    initGame();
+  </script>
+</body>
+</html>
